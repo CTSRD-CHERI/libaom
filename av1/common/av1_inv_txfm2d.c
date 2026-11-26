@@ -13,11 +13,12 @@
 #include "config/av1_rtcd.h"
 
 #include "av1/common/enums.h"
+#include "av1/common/idct.h"
 #include "av1/common/av1_txfm.h"
 #include "av1/common/av1_inv_txfm1d.h"
 #include "av1/common/av1_inv_txfm1d_cfg.h"
 
-void av1_highbd_iwht4x4_16_add_c(const tran_low_t *input, uint8_t *dest8,
+static void highbd_iwht4x4_16_add(const tran_low_t *input, uint16_t *dest,
                                  int stride, int bd) {
   /* 4-point reversible, orthonormal inverse Walsh-Hadamard in 3.5 adds,
      0.5 shifts per pixel. */
@@ -26,7 +27,6 @@ void av1_highbd_iwht4x4_16_add_c(const tran_low_t *input, uint8_t *dest8,
   tran_low_t a1, b1, c1, d1, e1;
   const tran_low_t *ip = input;
   tran_low_t *op = output;
-  uint16_t *dest = CONVERT_TO_SHORTPTR(dest8);
 
   for (i = 0; i < 4; i++) {
     a1 = ip[4 * 0] >> UNIT_QUANT_SHIFT;
@@ -78,14 +78,13 @@ void av1_highbd_iwht4x4_16_add_c(const tran_low_t *input, uint8_t *dest8,
   }
 }
 
-void av1_highbd_iwht4x4_1_add_c(const tran_low_t *in, uint8_t *dest8,
-                                int dest_stride, int bd) {
+static void highbd_iwht4x4_1_add(const tran_low_t *in, uint16_t *dest,
+                                 int dest_stride, int bd) {
   int i;
   tran_low_t a1, e1;
   tran_low_t tmp[4];
   const tran_low_t *ip = in;
   tran_low_t *op = tmp;
-  uint16_t *dest = CONVERT_TO_SHORTPTR(dest8);
   (void)bd;
 
   a1 = ip[0 * 4] >> UNIT_QUANT_SHIFT;
@@ -110,6 +109,26 @@ void av1_highbd_iwht4x4_1_add_c(const tran_low_t *in, uint8_t *dest8,
     dest++;
   }
 }
+
+void av1_highbd_iwht4x4_16_add_c(const tran_low_t *input, uint8_t *dest,
+                                int stride, int bd) {
+  highbd_iwht4x4_16_add(input, CONVERT_TO_SHORTPTR(dest), stride, bd);
+}
+
+void av1_highbd_iwht4x4_1_add_c(const tran_low_t *input, uint8_t *dest,
+                               int stride, int bd) {
+  highbd_iwht4x4_1_add(input, CONVERT_TO_SHORTPTR(dest), stride, bd);
+}
+
+#if defined(__CHERI_PURE_CAPABILITY__)
+void av1_highbd_iwht4x4_add_u16(const tran_low_t *input, uint16_t *dest,
+                               int stride, int eob, int bd) {
+  if (eob > 1)
+    highbd_iwht4x4_16_add(input, dest, stride, bd);
+  else
+    highbd_iwht4x4_1_add(input, dest, stride, bd);
+}
+#endif
 
 static inline TxfmFunc inv_txfm_type_to_func(TXFM_TYPE txfm_type) {
   switch (txfm_type) {
